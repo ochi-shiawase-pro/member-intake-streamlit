@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 import streamlit as st
 
-from src.form_fields import PROCEDURE_OPTIONS
+from src.form_fields import LOGIN_TROUBLE_OPTIONS, PROCEDURE_OPTIONS
 from src.sheets_repository import SheetsConfigError, SheetsRepository
 from src.ui_text import (
     AGREEMENT_LABEL,
@@ -14,7 +14,14 @@ from src.ui_text import (
     COMPLETION_MESSAGE,
     LINE_WARNING,
 )
-from src.validators import validate_submission
+from src.validators import (
+    normalize_email,
+    suggest_email_correction,
+    validate_submission,
+)
+
+
+EMAIL_HELP = "※大文字・小文字、全角・半角は区別されません（自動で揃えます）"
 
 
 JST = ZoneInfo("Asia/Tokyo")
@@ -102,6 +109,9 @@ FORM_KEYS = (
     "form_change_notes",
     "form_stop_current",
     "form_stop_notes",
+    "form_login_predicted_email",
+    "form_login_trouble_types",
+    "form_login_notes",
 )
 
 
@@ -128,7 +138,9 @@ def render_procedure_fields(procedure: str) -> dict[str, str]:
         new_email = st.text_input(
             "新しく登録したいログイン用メールアドレス",
             key="form_new_email",
+            help=EMAIL_HELP,
         )
+        st.caption(EMAIL_HELP)
         confirm_email = st.text_input(
             "確認のため、もう一度同じメールアドレスをご入力ください",
             key="form_new_email_confirm",
@@ -145,11 +157,14 @@ def render_procedure_fields(procedure: str) -> dict[str, str]:
         current_email = st.text_input(
             "現在登録しているメールアドレス",
             key="form_change_current",
+            help=EMAIL_HELP,
         )
         target_email = st.text_input(
             "変更後に使うメールアドレス",
             key="form_change_target",
+            help=EMAIL_HELP,
         )
+        st.caption(EMAIL_HELP)
         confirm_email = st.text_input(
             "確認のため、変更後のメールアドレスをもう一度ご入力ください",
             key="form_change_confirm",
@@ -162,16 +177,53 @@ def render_procedure_fields(procedure: str) -> dict[str, str]:
             "notes": notes,
         }
 
-    current_email = st.text_input(
-        "現在登録しているメールアドレス",
-        key="form_stop_current",
+    if procedure == "ご利用停止":
+        current_email = st.text_input(
+            "現在登録しているメールアドレス",
+            key="form_stop_current",
+            help=EMAIL_HELP,
+        )
+        st.caption(EMAIL_HELP)
+        notes = st.text_area("その他・ご連絡事項", key="form_stop_notes")
+        return {
+            "current_email": current_email,
+            "target_email": "",
+            "confirm_email": "",
+            "notes": notes,
+        }
+
+    # ログインに関するご相談
+    st.info(
+        "ログインでお困りの方のための受付です。"
+        "分かる範囲でご記入ください。お名前から照合しますので、"
+        "メールアドレスが分からなくても大丈夫です。"
     )
-    notes = st.text_area("その他・ご連絡事項", key="form_stop_notes")
+    trouble_types = st.multiselect(
+        "お困りの状況（あてはまるものをすべて）",
+        LOGIN_TROUBLE_OPTIONS,
+        key="form_login_trouble_types",
+    )
+    predicted_email = st.text_input(
+        "思い当たるログイン用メールアドレス（分かる範囲で / 任意）",
+        key="form_login_predicted_email",
+        help=EMAIL_HELP,
+    )
+    st.caption(EMAIL_HELP + "　※分からない場合は空欄で構いません")
+    free_notes = st.text_area(
+        "詳しい状況・ご連絡事項",
+        key="form_login_notes",
+        placeholder="例：先週まではログインできていました／メールが何度送っても届きません など",
+    )
+    combined_notes_parts: list[str] = []
+    if trouble_types:
+        combined_notes_parts.append("【お困りの状況】" + " / ".join(trouble_types))
+    if free_notes.strip():
+        combined_notes_parts.append("【詳細】" + free_notes.strip())
     return {
-        "current_email": current_email,
+        "current_email": predicted_email,
         "target_email": "",
         "confirm_email": "",
-        "notes": notes,
+        "notes": "\n".join(combined_notes_parts),
     }
 
 
@@ -186,12 +238,14 @@ def build_payload(
     confirm_email: str,
     notes: str,
 ) -> dict[str, str]:
-    if procedure == "新規登録":
-        ghost_target_email = target_email.strip()
-    elif procedure == "登録内容の変更":
-        ghost_target_email = target_email.strip()
+    current_email_n = normalize_email(current_email)
+    target_email_n = normalize_email(target_email)
+    confirm_email_n = normalize_email(confirm_email)
+
+    if procedure in ("新規登録", "登録内容の変更"):
+        ghost_target_email = target_email_n
     else:
-        ghost_target_email = current_email.strip()
+        ghost_target_email = current_email_n
 
     return {
         "procedure": procedure,
@@ -199,9 +253,9 @@ def build_payload(
         "furigana": furigana.strip(),
         "owner_teacher": owner_teacher.strip(),
         "flow_teacher": flow_teacher.strip(),
-        "current_email": current_email.strip(),
-        "target_email": target_email.strip(),
-        "confirm_email": confirm_email.strip(),
+        "current_email": current_email_n,
+        "target_email": target_email_n,
+        "confirm_email": confirm_email_n,
         "ghost_target_email": ghost_target_email,
         "notes": notes.strip(),
         "agreement": "同意あり",
@@ -281,11 +335,34 @@ def _build_confirm_rows(payload: dict[str, str]) -> list[tuple[str, str]]:
     elif procedure == "登録内容の変更":
         rows.append(("現在登録しているメールアドレス", payload["current_email"]))
         rows.append(("変更後のメールアドレス", payload["target_email"]))
-    else:
+    elif procedure == "ご利用停止":
         rows.append(("現在登録しているメールアドレス", payload["current_email"]))
+    else:  # ログインに関するご相談
+        rows.append((
+            "思い当たるメールアドレス",
+            payload["current_email"] or "（分からない）",
+        ))
 
-    rows.append(("その他・ご連絡事項", payload["notes"] or "（なし）"))
+    rows.append(("ご連絡事項・状況", payload["notes"] or "（なし）"))
     return rows
+
+
+def _show_email_typo_warnings(payload: dict[str, str]) -> None:
+    """よくあるドメインタイポを検出して、確認画面でやさしく注意喚起する。"""
+    candidates = [
+        ("メールアドレス", payload["target_email"]),
+        ("現在のメールアドレス", payload["current_email"]),
+    ]
+    for label, value in candidates:
+        if not value:
+            continue
+        suggestion = suggest_email_correction(value)
+        if suggestion:
+            st.warning(
+                f"{label}「{value}」は、もしかして "
+                f"**「{suggestion}」** のお間違いではありませんか？\n"
+                "このまま送信もできますが、念のためご確認ください。"
+            )
 
 
 def render_confirm_stage() -> None:
@@ -304,6 +381,8 @@ def render_confirm_stage() -> None:
             st.markdown(f"**{label}**")
         with col_value:
             st.write(value)
+
+    _show_email_typo_warnings(payload)
 
     st.divider()
 
