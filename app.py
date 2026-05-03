@@ -19,6 +19,69 @@ from src.validators import validate_submission
 
 JST = ZoneInfo("Asia/Tokyo")
 
+CUSTOM_STYLE = """
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+html, body, [class*="css"], .stApp, .stMarkdown, .stTextInput, .stTextArea,
+.stRadio, .stButton, .stCheckbox, .stForm, .stAlert, h1, h2, h3, h4, p, label {
+    font-family: 'M PLUS Rounded 1c', 'Hiragino Maru Gothic ProN',
+                 'Yu Gothic UI', sans-serif !important;
+}
+.stApp { background-color: #FFF9F0; }
+.block-container {
+    padding-top: 2.5rem !important;
+    padding-bottom: 3rem !important;
+    max-width: 720px !important;
+}
+h1, h2, h3 { color: #5C4A3D !important; letter-spacing: 0.02em; }
+.stTextInput input, .stTextArea textarea {
+    border-radius: 14px !important;
+    padding: 0.7rem 0.95rem !important;
+    border: 1.5px solid #F2D7D0 !important;
+    background-color: #FFFFFF !important;
+}
+.stTextInput input:focus, .stTextArea textarea:focus {
+    border-color: #E8A5A0 !important;
+    box-shadow: 0 0 0 3px rgba(232, 165, 160, 0.22) !important;
+}
+.stButton button, .stFormSubmitButton button, div[data-testid="stFormSubmitButton"] button {
+    border-radius: 999px !important;
+    padding: 0.65rem 1.6rem !important;
+    font-weight: 500 !important;
+    border: 1.5px solid #E8A5A0 !important;
+    background-color: #FFFFFF !important;
+    color: #C76B65 !important;
+    transition: all 0.2s ease;
+}
+.stButton button:hover, .stFormSubmitButton button:hover,
+div[data-testid="stFormSubmitButton"] button:hover {
+    background-color: #FBEDEB !important;
+    border-color: #C76B65 !important;
+}
+.stButton button[kind="primary"], .stFormSubmitButton button[kind="primary"],
+div[data-testid="stFormSubmitButton"] button[kind="primary"] {
+    background-color: #E8A5A0 !important;
+    color: #FFFFFF !important;
+    border-color: #E8A5A0 !important;
+}
+.stButton button[kind="primary"]:hover, .stFormSubmitButton button[kind="primary"]:hover,
+div[data-testid="stFormSubmitButton"] button[kind="primary"]:hover {
+    background-color: #D88B85 !important;
+    border-color: #D88B85 !important;
+}
+.stAlert { border-radius: 14px !important; }
+hr { border-color: #F2D7D0 !important; }
+div[data-testid="stForm"] {
+    background-color: #FFFDF8;
+    border: 1px solid #F5E4DE;
+    border-radius: 18px;
+    padding: 1.6rem 1.8rem !important;
+}
+</style>
+"""
+
 STAGE_INPUT = "input"
 STAGE_CONFIRM = "confirm"
 STAGE_COMPLETE = "complete"
@@ -304,6 +367,8 @@ def main() -> None:
         page_icon="📝",
         layout="centered",
     )
+
+    st.markdown(CUSTOM_STYLE, unsafe_allow_html=True)
 
     init_session_state()
 
