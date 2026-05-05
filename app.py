@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 import streamlit as st
 
 from src.form_fields import LOGIN_TROUBLE_OPTIONS, PROCEDURE_OPTIONS
+from src.ghost_client import GhostClient, GhostConfigError
 from src.sheets_repository import SheetsConfigError, SheetsRepository
 from src.ui_text import (
     AGREEMENT_LABEL,
@@ -410,6 +411,41 @@ def render_confirm_stage() -> None:
     try:
         repository = SheetsRepository.from_streamlit_secrets(st.secrets)
         receipt_id = repository.append_submission(payload)
+        # 受付完了と同時に、可能なら Ghost へも反映する（新規/変更のみ）。
+        try:
+            ghost = GhostClient.from_streamlit_secrets(st.secrets)
+        except GhostConfigError:
+            ghost = None
+
+        if ghost is not None:
+            procedure = payload["procedure"]
+            if procedure in ("新規登録", "登録内容の変更"):
+                repository.update_ghost_result(receipt_id, ghost_status="処理中")
+                try:
+                    if procedure == "新規登録":
+                        ghost.create_member(
+                            email=payload["target_email"],
+                            name=payload["name"],
+                            labels=["member-intake"],
+                        )
+                    else:
+                        current_email = payload["current_email"]
+                        target_email = payload["target_email"]
+                        member = ghost.find_member_by_email(current_email)
+                        if not member:
+                            raise RuntimeError("Ghost側に「現在登録メールアドレス」が見つかりませんでした。")
+                        ghost.update_member(
+                            member_id=str(member.get("id")),
+                            email=target_email,
+                            name=payload["name"] or None,
+                        )
+                    repository.update_ghost_result(receipt_id, ghost_status="完了", remarks="")
+                except Exception as exc:  # pragma: no cover - runtime safeguard
+                    repository.update_ghost_result(
+                        receipt_id,
+                        ghost_status="エラー",
+                        remarks=str(exc)[:400],
+                    )
     except SheetsConfigError as exc:
         st.error("保存先の設定がまだ完了していません。")
         st.info(str(exc))

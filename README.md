@@ -11,6 +11,7 @@ Streamlit で動かす受付サイトのたたき台です。
 の 3 種類の受付を行い、Google Workspace のスプレッドシート `億万長者リスト` の `受付一覧` シートへ保存します。
 
 Ghost への反映はこの段階では手動です。
+（※任意で、Secrets に Ghost Admin API を設定すると「新規登録」「登録内容の変更」は送信と同時に自動反映できます。）
 
 ## ファイル構成
 
@@ -56,6 +57,12 @@ member_intake_streamlit/
 - `client_x509_cert_url`
 - `spreadsheet_name`
 - `worksheet_name`
+
+任意（Ghost へ自動反映したい場合）:
+
+- `ghost_admin_api_url`
+- `ghost_admin_api_key`
+- `ghost_admin_api_version`（未指定なら `v5.0`）
 
 ## ローカル実行
 

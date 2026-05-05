@@ -6,12 +6,16 @@ from typing import Any
 
 import gspread
 from google.oauth2.service_account import Credentials
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 ]
+
+JST = ZoneInfo("Asia/Tokyo")
 
 
 class SheetsConfigError(RuntimeError):
@@ -72,6 +76,31 @@ class SheetsRepository:
 
         worksheet.append_row(row, value_input_option="USER_ENTERED")
         return receipt_id
+
+    def update_ghost_result(
+        self,
+        receipt_id: str,
+        *,
+        ghost_status: str,
+        ghost_processed_at: str | None = None,
+        remarks: str | None = None,
+    ) -> None:
+        worksheet = self.client.open(self.spreadsheet_name).worksheet(self.worksheet_name)
+        cell = worksheet.find(receipt_id)
+        row_index = cell.row
+
+        processed_at = ghost_processed_at
+        if processed_at is None:
+            processed_at = datetime.now(JST).strftime("%Y/%m/%d %H:%M:%S")
+
+        values = [
+            [ghost_status, processed_at, remarks or ""],
+        ]
+        worksheet.update(
+            f"O{row_index}:Q{row_index}",
+            values,
+            value_input_option="USER_ENTERED",
+        )
 
     def _next_receipt_id(self, worksheet: gspread.Worksheet) -> str:
         values = worksheet.col_values(1)
