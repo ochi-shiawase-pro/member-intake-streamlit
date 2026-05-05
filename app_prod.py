@@ -446,6 +446,15 @@ def render_confirm_stage() -> None:
                         ghost_status="エラー",
                         remarks=str(exc)[:400],
                     )
+        else:
+            # Ghost連携が未設定の場合も、受付側で分かるように備考へ残す
+            # （Ghost反映ステータス自体は初期値「未」のまま）
+            repository.update_ghost_result(
+                receipt_id,
+                ghost_status=payload["ghost_status"],
+                ghost_processed_at="",
+                remarks="Ghost連携未設定（Secretsに ghost_admin_api_url / ghost_admin_api_key がありません）",
+            )
     except SheetsConfigError as exc:
         st.error("保存先の設定がまだ完了していません。")
         st.info(str(exc))
