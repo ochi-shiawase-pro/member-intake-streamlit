@@ -7,12 +7,31 @@ import json
 import time
 import urllib.parse
 import urllib.request
+import urllib.error
 from dataclasses import dataclass
 from typing import Any
 
 
 class GhostConfigError(RuntimeError):
     pass
+
+
+class GhostApiError(RuntimeError):
+    def __init__(self, status: int, payload: dict[str, Any] | None, raw: str | None = None):
+        self.status = status
+        self.payload = payload
+        self.raw = raw
+        message = f"Ghost API HTTP {status}"
+        if payload and isinstance(payload, dict):
+            errors = payload.get("errors")
+            if isinstance(errors, list) and errors:
+                # Keep it short for sheet remarks
+                first = errors[0]
+                if isinstance(first, dict):
+                    msg = first.get("message") or first.get("context") or ""
+                    if msg:
+                        message += f": {msg}"
+        super().__init__(message)
 
 
 def _b64url(data: bytes) -> str:
@@ -64,6 +83,20 @@ def _request_json(
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             raw = resp.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:  # pragma: no cover - runtime safeguard
+        status = int(getattr(exc, "code", 0) or 0)
+        raw_err = ""
+        try:
+            raw_err = exc.read().decode("utf-8")
+        except Exception:
+            raw_err = ""
+        payload = None
+        if raw_err:
+            try:
+                payload = json.loads(raw_err)
+            except json.JSONDecodeError:
+                payload = None
+        raise GhostApiError(status, payload, raw_err) from exc
     except Exception as exc:  # pragma: no cover - runtime safeguard
         raise RuntimeError(f"Ghost API 通信エラー: {exc}") from exc
 
@@ -134,4 +167,3 @@ class GhostClient:
         payload = {"members": [member]}
         url = f"{self._members_url()}{member_id}/"
         return _request_json("PUT", url, headers=self._headers(), body=payload)
-

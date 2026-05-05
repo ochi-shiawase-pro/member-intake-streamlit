@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 import streamlit as st
 
 from src.form_fields import LOGIN_TROUBLE_OPTIONS, PROCEDURE_OPTIONS
-from src.ghost_client import GhostClient, GhostConfigError
+from src.ghost_client import GhostApiError, GhostClient, GhostConfigError
 from src.sheets_repository import SheetsConfigError, SheetsRepository
 from src.ui_text import (
     AGREEMENT_LABEL,
@@ -422,12 +422,30 @@ def render_confirm_stage() -> None:
             if procedure in ("新規登録", "登録内容の変更"):
                 repository.update_ghost_result(receipt_id, ghost_status="処理中")
                 try:
+                    skip_error = False
                     if procedure == "新規登録":
-                        ghost.create_member(
-                            email=payload["target_email"],
-                            name=payload["name"],
-                            labels=["member-intake"],
-                        )
+                        email = payload["target_email"]
+                        try:
+                            ghost.create_member(
+                                email=email,
+                                name=payload["name"],
+                                labels=["member-intake"],
+                            )
+                        except GhostApiError as exc:
+                            # 既にメンバーが存在する場合は、そのまま完了扱いにする
+                            if exc.status == 422:
+                                existing = ghost.find_member_by_email(email)
+                                if existing:
+                                    repository.update_ghost_result(
+                                        receipt_id,
+                                        ghost_status="完了",
+                                        remarks="既存メンバーのため追加はスキップしました。",
+                                    )
+                                    skip_error = True
+                                else:
+                                    raise
+                            else:
+                                raise
                     else:
                         current_email = payload["current_email"]
                         target_email = payload["target_email"]
@@ -439,7 +457,8 @@ def render_confirm_stage() -> None:
                             email=target_email,
                             name=payload["name"] or None,
                         )
-                    repository.update_ghost_result(receipt_id, ghost_status="完了", remarks="")
+                    if not skip_error:
+                        repository.update_ghost_result(receipt_id, ghost_status="完了", remarks="")
                 except Exception as exc:  # pragma: no cover - runtime safeguard
                     repository.update_ghost_result(
                         receipt_id,
