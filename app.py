@@ -6,7 +6,8 @@ from zoneinfo import ZoneInfo
 import streamlit as st
 
 from src.form_fields import LOGIN_TROUBLE_OPTIONS, PROCEDURE_OPTIONS
-from src.ghost_client import GhostApiError, GhostClient, GhostConfigError
+from src import ghost_client as ghost_client_mod
+from src.ghost_client import GhostClient, GhostConfigError
 from src.sheets_repository import SheetsConfigError, SheetsRepository
 from src.ui_text import (
     AGREEMENT_LABEL,
@@ -431,9 +432,10 @@ def render_confirm_stage() -> None:
                                 name=payload["name"],
                                 labels=["member-intake"],
                             )
-                        except GhostApiError as exc:
+                        except Exception as exc:
                             # 既にメンバーが存在する場合は、そのまま完了扱いにする
-                            if exc.status == 422:
+                            status = getattr(exc, "status", None)
+                            if status == 422:
                                 existing = ghost.find_member_by_email(email)
                                 if existing:
                                     repository.update_ghost_result(
