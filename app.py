@@ -14,7 +14,11 @@ from src.ui_text import (
     APP_DESCRIPTION,
     APP_TITLE,
     COMPLETION_MESSAGE,
+    GHOST_SITE_NAME,
+    GHOST_SITE_URL,
     LINE_WARNING,
+    NEXT_STEP_BODY,
+    NEXT_STEP_TITLE,
 )
 from src.validators import (
     normalize_email,
@@ -124,6 +128,8 @@ def init_session_state() -> None:
         st.session_state["pending_payload"] = None
     if "completed_receipt_id" not in st.session_state:
         st.session_state["completed_receipt_id"] = None
+    if "completed_procedure" not in st.session_state:
+        st.session_state["completed_procedure"] = None
 
 
 def reset_form() -> None:
@@ -132,6 +138,7 @@ def reset_form() -> None:
             del st.session_state[key]
     st.session_state["pending_payload"] = None
     st.session_state["completed_receipt_id"] = None
+    st.session_state["completed_procedure"] = None
     st.session_state["stage"] = STAGE_INPUT
 
 
@@ -487,6 +494,7 @@ def render_confirm_stage() -> None:
         return
 
     st.session_state["completed_receipt_id"] = receipt_id
+    st.session_state["completed_procedure"] = payload["procedure"]
     st.session_state["pending_payload"] = None
     st.session_state["stage"] = STAGE_COMPLETE
     st.rerun()
@@ -499,6 +507,13 @@ def render_complete_stage() -> None:
     receipt_id = st.session_state.get("completed_receipt_id")
     if receipt_id:
         st.write(f"受付番号: **{receipt_id}**")
+
+    procedure = st.session_state.get("completed_procedure")
+    if procedure in ("新規登録", "登録内容の変更"):
+        st.divider()
+        st.subheader(NEXT_STEP_TITLE)
+        st.markdown(f"### 🌿 [{GHOST_SITE_NAME}]({GHOST_SITE_URL})")
+        st.markdown(NEXT_STEP_BODY)
 
     st.divider()
 
